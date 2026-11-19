@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>端口管家</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="header-inner">
+        <div class="brand-block">
+          <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+          <div>
+            <h1>端口管家</h1>
+            <p>本机监听端口与 Node 进程</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <span class="service-state"><span class="status-dot"></span>服务运行中</span>
+          <button class="button button-danger-quiet" id="shutdownButton" type="button">
+            <span aria-hidden="true">⏻</span>
+            关闭服务
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="summary-band" aria-label="进程概览">
+        <div class="summary-inner">
+          <div class="metric">
+            <span class="metric-label">监听进程</span>
+            <strong id="listeningCount">--</strong>
+          </div>
+          <div class="metric">
+            <span class="metric-label">监听端口</span>
+            <strong id="endpointCount">--</strong>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Node 进程</span>
+            <strong id="nodeCount">--</strong>
+          </div>
+          <div class="metric metric-wide">
+            <span class="metric-label">最后更新</span>
+            <strong id="updatedAt">尚未读取</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace" aria-labelledby="listHeading">
+        <div class="workspace-header">
+          <div>
+            <h2 id="listHeading">进程列表</h2>
+            <p id="resultSummary">正在读取本机进程...</p>
+          </div>
+          <div class="refresh-controls">
+            <button class="button button-danger-outline" id="batchTerminateButton" type="button" disabled>
+              <span aria-hidden="true">×</span>
+              <span id="batchTerminateLabel">全部结束</span>
+            </button>
+            <label class="switch-control">
+              <input id="autoRefresh" type="checkbox" checked />
+              <span class="switch" aria-hidden="true"></span>
+              自动刷新
+            </label>
+            <label class="interval-control">
+              <span class="sr-only">刷新间隔</span>
+              <select id="refreshInterval">
+                <option value="3000">3 秒</option>
+                <option value="5000" selected>5 秒</option>
+                <option value="10000">10 秒</option>
+                <option value="30000">30 秒</option>
+              </select>
+            </label>
+            <button class="button button-primary" id="refreshButton" type="button">
+              <span class="refresh-symbol" aria-hidden="true">↻</span>
+              刷新
+            </button>
+          </div>
+        </div>
+
+        <div class="error-banner" id="errorBanner" role="alert" hidden>
+          <div>
+            <strong>读取失败</strong>
+            <p id="errorMessage"></p>
+          </div>
+          <button type="button" id="dismissError" aria-label="关闭错误提示">×</button>
+        </div>
+
+        <div class="toolbar">
+          <div class="tabs" role="tablist" aria-label="进程范围">
+            <button class="tab is-active" id="listeningTab" role="tab" aria-selected="true" data-view="listening" type="button">
+              监听进程
+              <span id="listeningTabCount">0</span>
+            </button>
+            <button class="tab" id="nodeTab" role="tab" aria-selected="false" data-view="node" type="button">
+              全部 Node
+              <span id="nodeTabCount">0</span>
+            </button>
+          </div>
+          <div class="filters">
+            <label class="search-control">
+              <span class="search-icon" aria-hidden="true"></span>
+              <span class="sr-only">搜索进程</span>
+              <input id="searchInput" type="search" placeholder="搜索端口、PID、名称或命令行" autocomplete="off" />
+            </label>
+            <label class="protocol-control">
+              <span class="sr-only">协议</span>
+              <select id="protocolFilter">
+                <option value="ALL">全部协议</option>
+                <option value="TCP">TCP</option>
+                <option value="UDP">UDP</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="table-shell">
+          <table id="processTable">
+            <thead>
+              <tr>
+                <th scope="col" class="selection-column">
+                  <input id="selectAllRows" type="checkbox" aria-label="选择当前列表中所有可结束进程" />
+                </th>
+                <th scope="col">进程</th>
+                <th scope="col">监听地址</th>
+                <th scope="col">项目与命令</th>
+                <th scope="col">父进程</th>
+                <th scope="col">启动时间</th>
+                <th scope="col" class="action-column">操作</th>
+              </tr>
+            </thead>
+            <tbody id="processRows"></tbody>
+          </table>
+          <div class="empty-state" id="emptyState" hidden>
+            <div class="empty-symbol" aria-hidden="true">∅</div>
+            <strong id="emptyTitle">没有找到进程</strong>
+            <p id="emptyDescription">调整筛选条件后重试。</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="terminateDialog" class="dialog">
+      <form method="dialog">
+        <div class="dialog-header">
+          <div>
+            <span class="dialog-eyebrow" id="terminateEyebrow">危险操作</span>
+            <h2 id="terminateTitle">结束进程</h2>
+          </div>
+          <button class="dialog-close" value="cancel" aria-label="关闭">×</button>
+        </div>
+        <div class="dialog-body">
+          <div class="target-summary">
+            <strong id="targetName"></strong>
+            <span id="targetPid"></span>
+            <code id="targetCommand"></code>
+          </div>
+          <fieldset class="kill-options">
+            <legend>结束范围</legend>
+            <label>
+              <input type="radio" name="killMode" value="single" checked />
+              <span>
+                <strong>仅结束此进程</strong>
+                <small>其他子进程可能继续运行</small>
+              </span>
+            </label>
+            <label>
+              <input type="radio" name="killMode" value="tree" />
+              <span>
+                <strong>结束整个进程树</strong>
+                <small>适用于 npm、Vite 等派生出的 Node 进程</small>
+              </span>
+            </label>
+          </fieldset>
+          <p class="dialog-warning">未保存的数据可能丢失。权限不足时，请关闭服务后右键以管理员身份运行 <code>start.bat</code>。</p>
+        </div>
+        <div class="dialog-actions">
+          <button class="button button-secondary" value="cancel">取消</button>
+          <button class="button button-danger" id="confirmTerminate" value="default" type="button">确认结束</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="shutdownDialog" class="dialog dialog-small">
+      <form method="dialog">
+        <div class="dialog-header">
+          <div>
+            <span class="dialog-eyebrow">关闭本机服务</span>
+            <h2>确定关闭端口管家？</h2>
+          </div>
+          <button class="dialog-close" value="cancel" aria-label="关闭">×</button>
+        </div>
+        <div class="dialog-body">
+          <p>关闭后列表将停止刷新，启动服务的命令窗口也会退出。再次使用时双击 <code>start.bat</code>。</p>
+        </div>
+        <div class="dialog-actions">
+          <button class="button button-secondary" value="cancel">继续使用</button>
+          <button class="button button-danger" id="confirmShutdown" value="default" type="button">关闭服务</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="service-closed" id="serviceClosed" hidden>
+      <div>
+        <span class="closed-icon" aria-hidden="true">⏻</span>
+        <h2>本机服务已关闭</h2>
+        <p>可以关闭此页面。再次使用时双击项目中的 <code>start.bat</code>。</p>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  </body>
+</html>
